@@ -1,0 +1,13 @@
+streamlit-nightly
+pandas==2.3.1
+numpy==2.3.1
+scikit-learn==1.7.1
+python-dotenv==1.0.1
+requests==2.32.3
+joblib==1.4.2
+streamlit
+pandas
+numpy
+python-dotenv
+requests
+scikit-learn # Still needed for TfidfVectorizer if you decide to add content-based features later, but not strictly for this mood-genre mapping. Keeping it for general utility.
