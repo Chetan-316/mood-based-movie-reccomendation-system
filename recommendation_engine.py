@@ -25,14 +25,14 @@ class MoodBasedRecommender:
     def __init__(self, data_handler):
         self.movies_df = data_handler.movies_df
 
-        # ✅ Ensure 'score' exists
+        # ✅ Ensure 'score' column exists and has values
         if 'score' not in self.movies_df.columns:
-            print("⚠️ 'score' column missing. Generating random scores.")
+            print("⚠️ 'score' column missing. Creating with random scores.")
             self.movies_df['score'] = np.random.uniform(5.0, 9.0, size=len(self.movies_df)).round(1)
         else:
-            # Fill missing scores if any
-            self.movies_df['score'] = self.movies_df['score'].fillna(
-                np.random.uniform(5.0, 9.0, size=len(self.movies_df))
+            # Fill individual NaNs with random numbers (row-by-row)
+            self.movies_df['score'] = self.movies_df['score'].apply(
+                lambda x: x if pd.notnull(x) else round(random.uniform(5.0, 9.0), 1)
             )
 
         print("✅ MoodBasedRecommender initialized with movie data.")
