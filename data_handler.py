@@ -9,66 +9,76 @@ warnings.filterwarnings('ignore')
 class MovieDataHandler:
     def __init__(self):
         self.movies_df = None
-        # Define the folder and filename for your custom dataset
         self.data_folder = 'movie_data'
         self.imdb_movies_filename = 'imdb_movies.csv'
+        self.bollywood_movies_filename = 'bollywood_movies.csv'
 
-    # This method is no longer needed for a custom downloaded dataset like imdb_movies.csv
+    # This method is no longer needed for custom datasets
     def download_movielens_data(self):
-        """This method is deprecated as we are using a local custom dataset.
-        Please ensure 'imdb_movies.csv' is in the 'movie_data' folder."""
-        print("Using custom dataset. Skipping MovieLens download.")
+        """This method is deprecated as we are using local custom datasets.
+        Please ensure 'imdb_movies.csv' and 'bollywood_movies.csv' are in the 'movie_data' folder."""
+        print("Using custom datasets. Skipping MovieLens download.")
         return self.data_folder
 
     def load_data(self):
-        """Load custom movie data from imdb_movies.csv."""
+        """Load and combine movie data from imdb_movies.csv and bollywood_movies.csv."""
         imdb_movies_path = os.path.join(self.data_folder, self.imdb_movies_filename)
+        bollywood_movies_path = os.path.join(self.data_folder, self.bollywood_movies_filename)
 
+        # --- Load and process IMDb movies ---
         if not os.path.exists(imdb_movies_path):
-            print(f"Error: Missing dataset file '{imdb_movies_path}'.")
-            print(f"Please ensure '{self.imdb_movies_filename}' is in the '{self.data_folder}' folder.")
-            raise FileNotFoundError(f"Dataset file '{self.imdb_movies_filename}' not found. Please check its location.")
+            raise FileNotFoundError(f"IMDb dataset file '{imdb_movies_path}' not found. Please check its location.")
+        print(f"Loading IMDb movies from '{imdb_movies_path}'...")
+        imdb_df = pd.read_csv(imdb_movies_path, low_memory=False)
 
-        print(f"Loading custom dataset from '{imdb_movies_path}'...")
+        # Preprocessing for IMDb movies
+        if 'names' in imdb_df.columns:
+            imdb_df.rename(columns={'names': 'title'}, inplace=True)
+        imdb_df.dropna(subset=['title'], inplace=True)
+        imdb_df = imdb_df[imdb_df['title'].astype(bool)]
 
-        # Load movies data
-        # low_memory=False helps avoid DtypeWarning for mixed types in columns
-        self.movies_df = pd.read_csv(imdb_movies_path, low_memory=False)
+        imdb_df['genre'] = imdb_df['genre'].fillna('')
+        imdb_df['genres'] = imdb_df['genre'].apply(lambda x: x.replace(', ', '|') if isinstance(x, str) else '')
+        if 'genre' in imdb_df.columns:
+            imdb_df.drop(columns=['genre'], inplace=True)
 
-        # --- Data Cleaning and Preprocessing for imdb_movies.csv ---
+        imdb_df['movieId'] = imdb_df.index # Assign unique IDs
+        imdb_df['score'] = pd.to_numeric(imdb_df['score'], errors='coerce').fillna(0) # IMDb score
+        imdb_df['source'] = 'IMDb' # Add source column
 
-        # 1. Rename 'names' column to 'title'
-        if 'names' in self.movies_df.columns:
-            self.movies_df.rename(columns={'names': 'title'}, inplace=True)
-        else:
-            print("Warning: 'names' column not found. Assuming 'title' is already correct.")
+        # Select relevant columns for IMDb movies
+        imdb_df = imdb_df[['movieId', 'title', 'genres', 'score', 'source']]
 
-        # Ensure 'title' column exists and is not empty
-        self.movies_df.dropna(subset=['title'], inplace=True)
-        self.movies_df = self.movies_df[self.movies_df['title'].astype(bool)] # Remove empty strings
+        # --- Load and process Bollywood movies ---
+        if not os.path.exists(bollywood_movies_path):
+            raise FileNotFoundError(f"Bollywood dataset file '{bollywood_movies_path}' not found. Please check its location.")
+        print(f"Loading Bollywood movies from '{bollywood_movies_path}'...")
+        bollywood_df = pd.read_csv(bollywood_movies_path, low_memory=False)
 
-        # 2. Handle 'genre' column: It's comma-separated, convert to pipe-separated for consistency
-        # Fill NaN with empty string before processing
-        self.movies_df['genre'] = self.movies_df['genre'].fillna('')
-        self.movies_df['genres'] = self.movies_df['genre'].apply(lambda x: x.replace(', ', '|') if isinstance(x, str) else '')
-        # Drop the original 'genre' column if 'genres' is successfully created
-        if 'genre' in self.movies_df.columns:
-            self.movies_df.drop(columns=['genre'], inplace=True)
+        # Preprocessing for Bollywood movies
+        bollywood_df.rename(columns={'Movie Name': 'title', 'Genre': 'genres'}, inplace=True)
+        bollywood_df.dropna(subset=['title'], inplace=True)
+        bollywood_df = bollywood_df[bollywood_df['title'].astype(bool)]
 
-        # 3. Create a unique 'movieId' for each movie
-        # Since imdb_movies.csv doesn't have a direct movieId for collaborative filtering,
-        # we'll use the DataFrame's internal index as a unique ID.
-        self.movies_df['movieId'] = self.movies_df.index
+        # Convert comma-separated genres to pipe-separated
+        bollywood_df['genres'] = bollywood_df['genres'].fillna('')
+        bollywood_df['genres'] = bollywood_df['genres'].apply(lambda x: x.replace(', ', '|') if isinstance(x, str) else '')
 
-        # 4. Ensure 'score' column (for popularity) is numeric
-        # Fill any non-numeric scores with 0 or NaN, then fill NaN with 0
-        self.movies_df['score'] = pd.to_numeric(self.movies_df['score'], errors='coerce').fillna(0)
+        # Use 'Revenue(INR)' as a proxy for score, fill NaN with 0
+        bollywood_df['score'] = pd.to_numeric(bollywood_df['Revenue(INR)'], errors='coerce').fillna(0)
+        
+        # Generate unique movieId for Bollywood movies, offset from IMDb movies
+        # Ensure IDs are unique across both datasets
+        max_imdb_id = imdb_df['movieId'].max() if not imdb_df.empty else -1
+        bollywood_df['movieId'] = bollywood_df.index + max_imdb_id + 1
+        bollywood_df['source'] = 'Bollywood' # Add source column
 
-        # Optional: Reduce dataset size for memory optimization if needed
-        # The imdb_movies.csv has ~10k movies, which might still be large for similarity matrices
-        # For mood-based, we don't build a similarity matrix, so this might not be strictly necessary
-        # but if you later add content-based features, keep this in mind.
-        # For now, we'll load all of it as we're not building a large similarity matrix.
+        # Select relevant columns for Bollywood movies
+        bollywood_df = bollywood_df[['movieId', 'title', 'genres', 'score', 'source']]
 
-        print(f"Loaded {len(self.movies_df)} movies from custom dataset.")
-        return self.movies_df # Only return movies_df
+        # --- Combine both datasets ---
+        self.movies_df = pd.concat([imdb_df, bollywood_df], ignore_index=True)
+
+        print(f"Loaded {len(imdb_df)} IMDb movies and {len(bollywood_df)} Bollywood movies.")
+        print(f"Combined dataset has {len(self.movies_df)} movies.")
+        return self.movies_df # Only return the combined movies_df
