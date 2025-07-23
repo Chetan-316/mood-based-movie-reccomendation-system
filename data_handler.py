@@ -43,7 +43,15 @@ class MovieDataHandler:
             imdb_df.drop(columns=['genre'], inplace=True)
 
         imdb_df['movieId'] = imdb_df.index # Assign unique IDs
-        imdb_df['score'] = pd.to_numeric(imdb_df['score'], errors='coerce').fillna(0) # IMDb score
+        
+        # *** START OF CHANGE ***
+        # Ensure 'score' column exists, even if original 'score' column is missing or empty
+        if 'score' not in imdb_df.columns:
+            imdb_df['score'] = 0.0 # Default to 0.0 if column doesn't exist
+        else:
+            imdb_df['score'] = pd.to_numeric(imdb_df['score'], errors='coerce').fillna(0.0) # IMDb score
+        # *** END OF CHANGE ***
+        
         imdb_df['source'] = 'IMDb' # Add source column
 
         # Select relevant columns for IMDb movies
@@ -64,8 +72,14 @@ class MovieDataHandler:
         bollywood_df['genres'] = bollywood_df['genres'].fillna('')
         bollywood_df['genres'] = bollywood_df['genres'].apply(lambda x: x.replace(', ', '|') if isinstance(x, str) else '')
 
-        # Use 'Revenue(INR)' as a proxy for score, fill NaN with 0
-        bollywood_df['score'] = pd.to_numeric(bollywood_df['Revenue(INR)'], errors='coerce').fillna(0)
+        # *** START OF CHANGE ***
+        # Ensure 'score' column exists based on 'Revenue(INR)', default to 0.0 if 'Revenue(INR)' is missing
+        if 'Revenue(INR)' not in bollywood_df.columns:
+            bollywood_df['score'] = 0.0 # Default to 0.0 if column doesn't exist
+        else:
+            # Use 'Revenue(INR)' as a proxy for score, fill NaN with 0
+            bollywood_df['score'] = pd.to_numeric(bollywood_df['Revenue(INR)'], errors='coerce').fillna(0.0)
+        # *** END OF CHANGE ***
         
         # Generate unique movieId for Bollywood movies, offset from IMDb movies
         # Ensure IDs are unique across both datasets
