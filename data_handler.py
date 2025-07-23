@@ -7,18 +7,11 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class MovieDataHandler:
-    def __init__(self):
+    def __init__(self, data_folder='movie_data', imdb_movies_filename='imdb_movies.csv', bollywood_movies_filename='bollywood_movies.csv'):
         self.movies_df = None
-        self.data_folder = 'movie_data'
-        self.imdb_movies_filename = 'imdb_movies.csv'
-        self.bollywood_movies_filename = 'bollywood_movies.csv'
-
-    # This method is no longer needed for custom datasets
-    def download_movielens_data(self):
-        """This method is deprecated as we are using local custom datasets.
-        Please ensure 'imdb_movies.csv' and 'bollywood_movies.csv' are in the 'movie_data' folder."""
-        print("Using custom datasets. Skipping MovieLens download.")
-        return self.data_folder
+        self.data_folder = data_folder
+        self.imdb_movies_filename = imdb_movies_filename
+        self.bollywood_movies_filename = bollywood_movies_filename
 
     def load_data(self):
         """Load and combine movie data from imdb_movies.csv and bollywood_movies.csv."""
@@ -44,13 +37,11 @@ class MovieDataHandler:
 
         imdb_df['movieId'] = imdb_df.index # Assign unique IDs
         
-        # *** START OF CHANGE ***
-        # Ensure 'score' column exists, even if original 'score' column is missing or empty
+        # Ensure 'score' column exists for IMDb movies
         if 'score' not in imdb_df.columns:
             imdb_df['score'] = 0.0 # Default to 0.0 if column doesn't exist
         else:
             imdb_df['score'] = pd.to_numeric(imdb_df['score'], errors='coerce').fillna(0.0) # IMDb score
-        # *** END OF CHANGE ***
         
         imdb_df['source'] = 'IMDb' # Add source column
 
@@ -72,17 +63,13 @@ class MovieDataHandler:
         bollywood_df['genres'] = bollywood_df['genres'].fillna('')
         bollywood_df['genres'] = bollywood_df['genres'].apply(lambda x: x.replace(', ', '|') if isinstance(x, str) else '')
 
-        # *** START OF CHANGE ***
-        # Ensure 'score' column exists based on 'Revenue(INR)', default to 0.0 if 'Revenue(INR)' is missing
+        # Ensure 'score' column exists for Bollywood movies
         if 'Revenue(INR)' not in bollywood_df.columns:
-            bollywood_df['score'] = 0.0 # Default to 0.0 if column doesn't exist
+            bollywood_df['score'] = 0.0 # Default to 0.0 if 'Revenue(INR)' column doesn't exist
         else:
-            # Use 'Revenue(INR)' as a proxy for score, fill NaN with 0
             bollywood_df['score'] = pd.to_numeric(bollywood_df['Revenue(INR)'], errors='coerce').fillna(0.0)
-        # *** END OF CHANGE ***
         
         # Generate unique movieId for Bollywood movies, offset from IMDb movies
-        # Ensure IDs are unique across both datasets
         max_imdb_id = imdb_df['movieId'].max() if not imdb_df.empty else -1
         bollywood_df['movieId'] = bollywood_df.index + max_imdb_id + 1
         bollywood_df['source'] = 'Bollywood' # Add source column
@@ -95,4 +82,4 @@ class MovieDataHandler:
 
         print(f"Loaded {len(imdb_df)} IMDb movies and {len(bollywood_df)} Bollywood movies.")
         print(f"Combined dataset has {len(self.movies_df)} movies.")
-        return self.movies_df # Only return the combined movies_df
+        return self.movies_df
