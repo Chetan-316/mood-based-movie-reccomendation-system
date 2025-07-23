@@ -1,4 +1,5 @@
 # streamlit_app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -6,123 +7,149 @@ from data_handler import MovieDataHandler
 from recommendation_engine import MoodBasedRecommender
 from omdb_api import OMDbAPI
 from dotenv import load_dotenv
-import time # For st.spinner delay
+import time
 
-load_dotenv() # Load environment variables from .env file
+load_dotenv()  # Load environment variables from .env file
 
 # Set page config
 st.set_page_config(
-    page_title="Mood-Based Movie Recommendation System",
-    page_icon="🎬",
-    layout="wide"
+    page_title="🎬 CineMood: Mood-Based Movie Recommendations",
+    page_icon="🎥",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state variables
+# 🎨 Advanced Cinematic UI
+st.markdown("""
+    <style>
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+        background: #0a0e1a;
+        color: #ffffff;
+        scroll-behavior: smooth;
+    }
+    .stApp {
+        background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 25%, #2d1b3d 50%, #1a1f2e 75%, #0a0e1a 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+    }
+    @keyframes gradientShift {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    .main-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 3.5rem;
+        font-weight: 900;
+        text-align: center;
+        background: linear-gradient(45deg, #ff6b6b, #48dbfb, #feca57, #ff9ff3);
+        background-size: 400% 400%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: gradientText 8s ease infinite;
+        margin: 1rem 0;
+    }
+    @keyframes gradientText {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
+# ✅ Debug: Track state
 if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
     st.session_state.data_handler = None
     st.session_state.recommender = None
 
+
 @st.cache_data
 def load_data():
     """Load and process data for mood-based filtering."""
-    data_handler = MovieDataHandler()
-    # This will load imdb_movies.csv
-    movies_df = data_handler.load_data()
-    return data_handler
+    print("✅ Loading dataset...")
+    try:
+        data_handler = MovieDataHandler()
+        df = data_handler.load_data()
+        print(f"✅ Loaded {len(df)} movies.")
+        return data_handler
+    except Exception as e:
+        print(f"❌ Failed to load data: {e}")
+        # Provide fallback
+        fallback_data = pd.DataFrame({
+            "title": ["Inception", "3 Idiots", "The Dark Knight", "Dil Chahta Hai"],
+            "genres": ["Action|Sci-Fi", "Comedy|Drama", "Action|Thriller", "Drama|Romance"],
+            "source": ["IMDb", "Bollywood", "IMDb", "Bollywood"]
+        })
+        data_handler = MovieDataHandler()
+        data_handler.movies_df = fallback_data
+        return data_handler
+
 
 @st.cache_resource
-# Fixed UnhashableParamError by adding an underscore to the parameter name
 def initialize_recommender(_data_handler):
     """Initialize mood-based recommendation engine."""
+    print("✅ Initializing recommender...")
     return MoodBasedRecommender(_data_handler)
 
-def main():
-    st.title("🎬 Mood-Based Movie Recommendation System")
-    st.sidebar.title("Navigation")
 
-    # Load data and initialize recommender
+def main():
+    st.markdown('<h1 class="main-title">🎬 CineMood</h1>', unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center;'>Discover movies that perfectly match your mood</h4>", unsafe_allow_html=True)
+
+    # Load data
     if not st.session_state.data_loaded:
-        with st.spinner("Loading movie data from imdb_movies.csv and initializing system..."): # ✅ Changed message
+        with st.spinner("🎞️ Loading movies..."):
             st.session_state.data_handler = load_data()
             st.session_state.recommender = initialize_recommender(st.session_state.data_handler)
             st.session_state.data_loaded = True
 
-    # OMDb API setup
     omdb_api = OMDbAPI()
 
-    # Mood selection dropdown
+    # Sidebar
+    st.sidebar.header("🎭 Select Mood")
     mood_options = list(MoodBasedRecommender.MOOD_GENRE_MAP.keys())
-    selected_mood = st.sidebar.selectbox(
-        "Select your current mood:",
-        mood_options
-    )
+    selected_mood = st.sidebar.selectbox("How are you feeling today?", mood_options)
 
     n_recommendations = st.sidebar.slider(
-        "Number of Recommendations:",
-        min_value=3,
-        max_value=15,
-        value=6 # Default to 6 recommendations for a 3-column grid
+        "Number of Recommendations",
+        min_value=3, max_value=12, value=6
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### Dataset Info")
-    if st.session_state.data_loaded:
-        st.sidebar.write(f"Total Movies: {len(st.session_state.data_handler.movies_df)}")
+    st.sidebar.info("💡 Tip: Select a mood to discover matching movies.")
 
-    st.header(f"Movies for a '{selected_mood}' Mood:")
-
-    if st.button(f"Get Recommendations for {selected_mood}"):
-        with st.spinner("Finding movies that match your mood..."):
+    # Main recommendations section
+    if st.button(f"🍿 Recommend {selected_mood} Movies"):
+        with st.spinner("🎥 Fetching movie recommendations..."):
             recommendations = st.session_state.recommender.get_movies_by_mood(
                 selected_mood, n_recommendations
             )
             display_recommendations(recommendations, omdb_api)
 
-    # Optional: Display popular movies as a general option
-    st.markdown("---")
-    st.subheader("Or, just some popular movies:")
-    if st.button("Show Popular Movies"):
-        with st.spinner("Fetching popular movies..."):
-            popular_recommendations = st.session_state.recommender.get_popular_movies(n_recommendations)
-            display_recommendations(popular_recommendations, omdb_api)
-
 
 def display_recommendations(recommendations, omdb_api):
-    """Display recommendations with posters and details fetched from OMDb API."""
+    """Display recommendations in a grid."""
     if not recommendations:
-        st.warning("No recommendations found for this mood. Try a different mood or show popular movies.")
+        st.warning("😕 No movies found. Try a different mood.")
         return
 
-    st.markdown("---")
-    # Create columns for grid layout (3 columns for better visual appeal)
     cols = st.columns(3)
 
     for i, movie in enumerate(recommendations):
-        col = cols[i % 3] # Distribute movies across columns
-
+        col = cols[i % 3]
         with col:
-            # Fetch detailed info and poster from OMDb API
-            # Use st.cache_data for OMDb API calls to avoid re-fetching on every rerun
-            @st.cache_data(show_spinner=False)
-            def get_omdb_details_cached(title):
-                return omdb_api.get_movie_details(title)
-
-            omdb_details = get_omdb_details_cached(movie['title'])
-
-            st.markdown(f"**{movie['title']}**")
-            st.markdown(f"*Genres: {movie['genres']}*")
-
-            if omdb_details:
-                st.markdown(f"*IMDb Rating: {omdb_details.get('rating', 'N/A')}*")
-                poster_url = omdb_details.get('poster_url', "https://via.placeholder.com/500x750?text=No+Image")
-                st.image(poster_url, width=200, caption=movie['title'])
+            st.markdown(f"**🎬 {movie['title']}**")
+            st.markdown(f"*Genres:* {movie['genres'].replace('|', ', ')}")
+            details = omdb_api.get_movie_details(movie['title'])
+            poster = details.get("poster_url") if details else None
+            if poster and poster != "N/A":
+                st.image(poster, use_container_width=True)  # ✅ Updated parameter
             else:
-                st.markdown(f"*IMDb Rating: {movie.get('score', 'N/A')}* (from dataset)") # Use dataset score if OMDb fails
-                st.image("https://via.placeholder.com/500x750?text=No+Image", width=200, caption="No Poster")
-                st.markdown("*Details not available from OMDb.*")
-            
-            st.markdown("---") # Separator for each movie
+                st.image("https://via.placeholder.com/300x450?text=No+Image", use_container_width=True)
+            rating = details.get("rating") if details else "N/A"
+            st.markdown(f"⭐ IMDb Rating: {rating}")
+
 
 if __name__ == "__main__":
     main()
